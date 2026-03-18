@@ -10,7 +10,7 @@
 #include "Person.h"
 #include "functions.h"
 
-// ── Manual input (from v0.1) ─────────────────
+// ── Manual input ─────────────────────────────
 void manualInput() {
     std::vector<Person> students;
     int n, numHW;
@@ -22,7 +22,7 @@ void manualInput() {
 
         std::cout << "How many homework assignments per student? ";
         std::cin >> numHW;
-        if (numHW <= 0) throw std::invalid_argument("Number of homework assignments must be positive.");
+        if (numHW <= 0) throw std::invalid_argument("Number of HW must be positive.");
 
         for (int i = 0; i < n; ++i) {
             std::cout << "\n--- Student " << (i + 1) << " ---\n";
@@ -35,14 +35,12 @@ void manualInput() {
                 double s;
                 std::cout << "HW" << j << " score    : ";
                 std::cin >> s;
-                if (s < 0 || s > 10) throw std::out_of_range("Score must be between 0 and 10.");
+                if (s < 0 || s > 10) throw std::out_of_range("Score must be 0-10.");
                 hw.push_back(s);
             }
-
             double exam;
             std::cout << "Exam score   : "; std::cin >> exam;
-            if (exam < 0 || exam > 10) throw std::out_of_range("Exam score must be between 0 and 10.");
-
+            if (exam < 0 || exam > 10) throw std::out_of_range("Exam must be 0-10.");
             students.emplace_back(firstName, surname, hw, exam);
         }
 
@@ -51,12 +49,9 @@ void manualInput() {
         std::cin >> choice;
         bool useMedian = (choice == 'M' || choice == 'm');
 
-        for (auto& p : students)
-            p.calcFinalGrade(useMedian);
-
+        for (auto& p : students) p.calcFinalGrade(useMedian);
         std::sort(students.begin(), students.end(), sortByName);
 
-        // Print results
         std::cout << "\n========== RESULTS (" << (useMedian ? "Median" : "Average") << ") ==========\n";
         std::cout << std::left
                   << std::setw(12) << "Name"
@@ -82,70 +77,96 @@ void manualInput() {
     }
 }
 
-// ── Run speed test with a container type ─────
-template<typename Container>
-void runSpeedTest(const std::string& label,
-                  const std::string& filename,
-                  int count) {
-    std::cout << "\n[" << label << "] " << count << " records\n";
-
-    Container students;
-
-    // 1. Read
-    double t1 = measureTime([&]() {
-        readFromFile(filename, students);
-    });
-    std::cout << "  Read        : " << std::fixed << std::setprecision(4) << t1 << " s\n";
-
-    // 2. Sort
-    double t2 = measureTime([&]() {
-        std::sort(students.begin(), students.end(), sortByName);
-    });
-    std::cout << "  Sort        : " << t2 << " s\n";
-
-    // 3. Split
-    std::string passedFile = "passed_" + label + "_" + std::to_string(count) + ".txt";
-    std::string failedFile = "failed_" + label + "_" + std::to_string(count) + ".txt";
-    double t3 = measureTime([&]() {
-        splitStudents(students, passedFile, failedFile, false);
-    });
-    std::cout << "  Split+Write : " << t3 << " s\n";
-    std::cout << "  TOTAL       : " << (t1 + t2 + t3) << " s\n";
+// ── Print speed result row ────────────────────
+void printRow(const std::string& container, const std::string& strategy,
+              int count, double t1, double t2, double t3) {
+    std::cout << std::left
+              << std::setw(10) << container
+              << std::setw(12) << strategy
+              << std::setw(12) << count
+              << std::fixed << std::setprecision(4)
+              << std::setw(10) << t1
+              << std::setw(10) << t2
+              << std::setw(10) << t3
+              << std::setw(10) << (t1+t2+t3) << "\n";
 }
 
-// Specialization for std::list (no random access sort)
-template<>
-void runSpeedTest<std::list<Person>>(const std::string& label,
-                                      const std::string& filename,
-                                      int count) {
-    std::cout << "\n[" << label << "] " << count << " records\n";
+// ── Speed test: vector ────────────────────────
+void testVector(const std::string& fname, int count) {
+    // Strategy 1
+    {
+        std::vector<Person> s;
+        double t1 = measureTime([&](){ readFromFile(fname, s); });
+        double t2 = measureTime([&](){ std::sort(s.begin(), s.end(), sortByName); });
+        std::string pf = "v_s1_passed_" + std::to_string(count) + ".txt";
+        std::string ff = "v_s1_failed_" + std::to_string(count) + ".txt";
+        double t3 = measureTime([&](){ strategy1(s, pf, ff, false); });
+        printRow("vector", "Strategy1", count, t1, t2, t3);
+    }
+    // Strategy 2
+    {
+        std::vector<Person> s;
+        double t1 = measureTime([&](){ readFromFile(fname, s); });
+        double t2 = measureTime([&](){ std::sort(s.begin(), s.end(), sortByName); });
+        std::string pf = "v_s2_passed_" + std::to_string(count) + ".txt";
+        std::string ff = "v_s2_failed_" + std::to_string(count) + ".txt";
+        double t3 = measureTime([&](){ strategy2(s, pf, ff, false); });
+        printRow("vector", "Strategy2", count, t1, t2, t3);
+    }
+}
 
-    std::list<Person> students;
+// ── Speed test: list ──────────────────────────
+void testList(const std::string& fname, int count) {
+    // Strategy 1
+    {
+        std::list<Person> s;
+        double t1 = measureTime([&](){ readFromFile(fname, s); });
+        double t2 = measureTime([&](){ s.sort(sortByName); });
+        std::string pf = "l_s1_passed_" + std::to_string(count) + ".txt";
+        std::string ff = "l_s1_failed_" + std::to_string(count) + ".txt";
+        double t3 = measureTime([&](){ strategy1List(s, pf, ff, false); });
+        printRow("list", "Strategy1", count, t1, t2, t3);
+    }
+    // Strategy 2
+    {
+        std::list<Person> s;
+        double t1 = measureTime([&](){ readFromFile(fname, s); });
+        double t2 = measureTime([&](){ s.sort(sortByName); });
+        std::string pf = "l_s2_passed_" + std::to_string(count) + ".txt";
+        std::string ff = "l_s2_failed_" + std::to_string(count) + ".txt";
+        double t3 = measureTime([&](){ strategy2List(s, pf, ff, false); });
+        printRow("list", "Strategy2", count, t1, t2, t3);
+    }
+}
 
-    double t1 = measureTime([&]() {
-        readFromFile(filename, students);
-    });
-    std::cout << "  Read        : " << std::fixed << std::setprecision(4) << t1 << " s\n";
-
-    double t2 = measureTime([&]() {
-        students.sort(sortByName);
-    });
-    std::cout << "  Sort        : " << t2 << " s\n";
-
-    std::string passedFile = "passed_" + label + "_" + std::to_string(count) + ".txt";
-    std::string failedFile = "failed_" + label + "_" + std::to_string(count) + ".txt";
-    double t3 = measureTime([&]() {
-        splitStudentsList(students, passedFile, failedFile, false);
-    });
-    std::cout << "  Split+Write : " << t3 << " s\n";
-    std::cout << "  TOTAL       : " << (t1 + t2 + t3) << " s\n";
+// ── Speed test: deque ─────────────────────────
+void testDeque(const std::string& fname, int count) {
+    // Strategy 1
+    {
+        std::deque<Person> s;
+        double t1 = measureTime([&](){ readFromFile(fname, s); });
+        double t2 = measureTime([&](){ std::sort(s.begin(), s.end(), sortByName); });
+        std::string pf = "d_s1_passed_" + std::to_string(count) + ".txt";
+        std::string ff = "d_s1_failed_" + std::to_string(count) + ".txt";
+        double t3 = measureTime([&](){ strategy1(s, pf, ff, false); });
+        printRow("deque", "Strategy1", count, t1, t2, t3);
+    }
+    // Strategy 2
+    {
+        std::deque<Person> s;
+        double t1 = measureTime([&](){ readFromFile(fname, s); });
+        double t2 = measureTime([&](){ std::sort(s.begin(), s.end(), sortByName); });
+        std::string pf = "d_s2_passed_" + std::to_string(count) + ".txt";
+        std::string ff = "d_s2_failed_" + std::to_string(count) + ".txt";
+        double t3 = measureTime([&](){ strategy2(s, pf, ff, false); });
+        printRow("deque", "Strategy2", count, t1, t2, t3);
+    }
 }
 
 // ── Generate all 4 data files ─────────────────
 void generateFiles() {
     srand(static_cast<unsigned>(time(nullptr)));
     std::vector<int> sizes = {10000, 100000, 1000000, 10000000};
-
     std::cout << "\nGenerating student data files...\n";
     for (int s : sizes) {
         std::string fname = "students" + std::to_string(s) + ".txt";
@@ -164,16 +185,24 @@ void generateFiles() {
 void speedAnalysis() {
     std::vector<int> sizes = {10000, 100000, 1000000, 10000000};
 
-    std::cout << "\n======= SPEED ANALYSIS =======\n";
+    std::cout << "\n";
+    std::cout << std::left
+              << std::setw(10) << "Container"
+              << std::setw(12) << "Strategy"
+              << std::setw(12) << "Records"
+              << std::setw(10) << "Read(s)"
+              << std::setw(10) << "Sort(s)"
+              << std::setw(10) << "Split(s)"
+              << std::setw(10) << "Total(s)" << "\n";
+    std::cout << std::string(74, '=') << "\n";
 
     for (int s : sizes) {
         std::string fname = "students" + std::to_string(s) + ".txt";
-
-        std::cout << "\n--- " << s << " records ---";
+        std::cout << "\n-- " << s << " records --\n";
         try {
-            runSpeedTest<std::vector<Person>>("vector", fname, s);
-            runSpeedTest<std::list<Person>>  ("list",   fname, s);
-            runSpeedTest<std::deque<Person>> ("deque",  fname, s);
+            testVector(fname, s);
+            testList  (fname, s);
+            testDeque (fname, s);
         } catch (const std::exception& e) {
             std::cerr << "Error: " << e.what() << "\n";
         }
@@ -190,14 +219,14 @@ int main() {
     std::cout << "\nChoose option:\n"
               << "  1. Manual input\n"
               << "  2. Generate student data files\n"
-              << "  3. Run speed analysis (vector/list/deque)\n"
+              << "  3. Run speed analysis (vector/list/deque x Strategy1/2)\n"
               << "Choice: ";
     std::cin >> option;
 
     switch (option) {
-        case 1: manualInput();    break;
-        case 2: generateFiles();  break;
-        case 3: speedAnalysis();  break;
+        case 1: manualInput();   break;
+        case 2: generateFiles(); break;
+        case 3: speedAnalysis(); break;
         default: std::cout << "Invalid option.\n";
     }
 
